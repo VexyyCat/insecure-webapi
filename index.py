@@ -38,6 +38,22 @@ def getToken():
 def hashToken(t):
 	return hashlib.sha256(str(t).encode()).hexdigest()
 
+MAX_INTENTOS, BLOQUEO_S, TOKEN_TTL_MIN = 5, 900, 30
+# ponytail: en memoria (un proceso, se pierde al reiniciar); bloquear por uname permite DoS dirigido, pasar a BD y/o IP+uname si importa
+intentos = {}    # uname -> (fallos, bloqueado_hasta)
+ultimoTotp = {}  # id_Usuario -> ultimo codigo TOTP aceptado (anti-replay)
+HASH_FALSO = bcrypt.hashpw(b"x", bcrypt.gensalt()).decode()  # iguala el tiempo de respuesta si el usuario no existe
+
+def bloqueado(u):
+	f, h = intentos.get(u, (0, 0))
+	if time.time() >= h:
+		intentos.pop(u, None)
+		return False
+	return f >= MAX_INTENTOS
+
+def fallo(u):
+	intentos[u] = (intentos.get(u, (0, 0))[0] + 1, time.time() + BLOQUEO_S)
+
 EXT_PERMITIDAS = {"png", "jpg", "jpeg", "gif"}
 
 def totp(secret, t=None):
@@ -80,6 +96,10 @@ def Registro():
 	# TODO checar si estan vacio los elementos del json
 	if not R:
 		return {"R":-1}
+	# A07: politica minima de contrasena (bcrypt solo usa los primeros 72 bytes)
+	if not 8 <= len(str(request.json["password"]).encode()) <= 72:
+		db.close()
+		return {"R":-3}
 	# TODO validar correo en json
 	# TODO Control de error de la DB
 	R = False
@@ -131,6 +151,11 @@ def Login():
 	# TODO checar si estan vacio los elementos del json
 	if not R:
 		return {"R":-1}
+	# A07: bloqueo temporal tras varios intentos fallidos
+	u = str(request.json["uname"])
+	if bloqueado(u):
+		db.close()
+		return {"R":-6}
 
 	# TODO validar correo en json
 	# TODO Control de error de la DB
@@ -145,12 +170,18 @@ def Login():
 		return {"R":-2}
 
 
-	if not R or not bcrypt.checkpw(str(request.json["password"]).encode(), R[0][1].encode()):
+	# checkpw siempre se ejecuta (con hash falso si no existe el usuario): sin enumeracion por tiempo
+	if not bcrypt.checkpw(str(request.json["password"]).encode(), (R[0][1] if R else HASH_FALSO).encode()) or not R:
+		fallo(u)
 		db.close()
 		return {"R":-3}
-	if not verifyTotp(R[0][2], request.json["totp"]):
+	# A07: TOTP invalido o reutilizado (replay)
+	if not verifyTotp(R[0][2], request.json["totp"]) or ultimoTotp.get(R[0][0]) == str(request.json["totp"]):
+		fallo(u)
 		db.close()
 		return {"R":-5}
+	ultimoTotp[R[0][0]] = str(request.json["totp"])
+	intentos.pop(u, None)
 
 	T = getToken();
 	try:
@@ -215,7 +246,7 @@ def Imagen():
 	R = False
 	try:
 		with db.cursor() as cursor:
-			cursor.execute('select id_Usuario from AccesoToken where token = %s', (hashToken(TKN),))
+			cursor.execute('select id_Usuario from AccesoToken where token = %s and fecha > now() - interval %s minute', (hashToken(TKN), TOKEN_TTL_MIN))
 			R = cursor.fetchall()
 	except Exception as e: 
 		print(e)
@@ -291,7 +322,7 @@ def Descargar():
 	R = False
 	try:
 		with db.cursor() as cursor:
-			cursor.execute('select id_Usuario from AccesoToken where token = %s', (hashToken(TKN),))
+			cursor.execute('select id_Usuario from AccesoToken where token = %s and fecha > now() - interval %s minute', (hashToken(TKN), TOKEN_TTL_MIN))
 			R = cursor.fetchall()
 	except Exception as e: 
 		print(e)

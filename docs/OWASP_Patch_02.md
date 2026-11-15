@@ -2,8 +2,6 @@
 
 Referencia: https://top10.owasp.org/2025/ (OWASP Top 10:2025, A05:2025 – Injection)
 
-Todos los cambios son en `index.py` (números de línea del archivo ya parcheado). Todas las consultas pasan de concatenar/interpolar texto a **consultas parametrizadas** (`%s` + tupla de valores de `mysql.connector`), de modo que el dato nunca se interpreta como SQL.
-
 ## CWE mapeados
 
 - CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')
