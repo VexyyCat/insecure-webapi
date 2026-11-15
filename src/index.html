@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Insecure WebAPI</title>
+<style>
+	html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+	#gif { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+	#entrar {
+		position: fixed; inset: 0; width: 100%; border: 0; cursor: pointer;
+		background: rgba(0, 0, 0, .7); color: #fff; font: 600 2rem system-ui, sans-serif;
+	}
+	#entrar.oculto { display: none; }
+</style>
+</head>
+<body>
+<img id="gif" src="/src/fedelobo-bandera-de-m%C3%A9xico.gif" alt="Vamoooh!!!">
+<audio id="audio" src="/src/Arriba.mp3" loop preload="auto"></audio>
+<button id="entrar" type="button">Puchale Play</button>
+<script>
+	document.getElementById('entrar').onclick = function () {
+		document.getElementById('audio').play();
+		this.classList.add('oculto');
+	};
+</script>
+</body>
+</html>

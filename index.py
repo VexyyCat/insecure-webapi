@@ -14,8 +14,6 @@ from bottle import route, run, template, post, get, hook, request, response, sta
 import gzip
 import secrets
 
-
-
 def loadDatabaseSettings(pathjs):
 	pathjs = Path(pathjs)
 	sjson = False
@@ -58,7 +56,17 @@ def fallo(u):
 def cabeceras():
 	# A02: cabeceras de seguridad; no-store evita cachear tokens y archivos
 	response.set_header('X-Content-Type-Options', 'nosniff')
-	response.set_header('Cache-Control', 'no-store')
+	if not request.path.startswith('/src/'):  # el front estatico si puede cachearse
+		response.set_header('Cache-Control', 'no-store')
+
+# Front: pagina con el gif y el audio de src/ (static_file impide salir de la carpeta)
+@get('/')
+def Front():
+	return static_file('index.html', root='src')
+
+@get('/src/<archivo>')
+def Estatico(archivo):
+	return static_file(archivo, root='src')
 
 EXT_PERMITIDAS = {"png", "jpg", "jpeg", "gif"}
 
@@ -123,9 +131,6 @@ def Registro():
 	# totp_secret se entrega una sola vez para registrarlo en la app autenticadora
 	uri = f'otpauth://totp/insecure-webapi:{quote(str(request.json["uname"]))}?secret={secret}&issuer=insecure-webapi'
 	return {"R":0,"D":R,"totp_secret":secret,"otpauth":uri}
-
-
-
 
 """
 /*
@@ -310,7 +315,6 @@ def Descargar():
 		password = dbcnf['password']
 	)
 	
-	
 	###/ obtener el cuerpo de la peticion
 	if not request.json:
 		return {"R":-1}
@@ -323,7 +327,12 @@ def Descargar():
 	# TODO validar correo en json
 	# Comprobar que el usuario sea valido
 	TKN = request.json['token'];
-	idImagen = request.json['id'];
+	# A05: id estricto; MySQL convertiria '1 or 1=1' en 1 por prefijo numerico
+	try:
+		idImagen = int(request.json['id'])
+	except (ValueError, TypeError):
+		db.close()
+		return {"R":-1}
 	
 	R = False
 	try:
@@ -334,8 +343,6 @@ def Descargar():
 		print(e)
 		db.close()
 		return {"R":-2}
-		
-	
 	
 	# A01: token obligatorio
 	if not R:

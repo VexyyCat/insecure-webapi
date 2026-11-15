@@ -31,3 +31,7 @@ Referencia: https://top10.owasp.org/2025/ (OWASP Top 10:2025, A05:2025 – Injec
 
 - **`POST /Descargar`: buscar imagen** (línea 327, modificada)
   - `id` (controlado por el cliente) iba concatenado; ahora `id` e `id_Usuario` son parámetros.
+
+- **`POST /Descargar`: `id` estricto** (líneas 330-335, nuevas; encontrado al probar la API)
+  - CWE-20: Improper Input Validation. MySQL convierte un texto como `'1 or 1=1'` en el número 1 (prefijo numérico), así que un `id` con basura al final coincidía con la imagen 1. No era inyección (la consulta ya está parametrizada y filtra por dueño), pero se aceptaba entrada inválida.
+  - Ahora `id` se convierte con `int()`; si no es un entero responde `R:-1`.
