@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import os
 import struct
+from urllib.parse import quote
 import time
 import bcrypt
 import mysql.connector
@@ -99,7 +100,8 @@ def Registro():
 		print(e)
 		return {"R":-2}
 	# totp_secret se entrega una sola vez para registrarlo en la app autenticadora
-	return {"R":0,"D":R,"totp_secret":secret}
+	uri = f'otpauth://totp/insecure-webapi:{quote(str(request.json["uname"]))}?secret={secret}&issuer=insecure-webapi'
+	return {"R":0,"D":R,"totp_secret":secret,"otpauth":uri}
 
 
 
