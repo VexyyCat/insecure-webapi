@@ -10,7 +10,7 @@ import mysql.connector
 import base64
 import shutil
 from pathlib import Path
-from bottle import route, run, template, post, get, request, response, static_file
+from bottle import route, run, template, post, get, hook, request, response, static_file
 import gzip
 import secrets
 
@@ -53,6 +53,12 @@ def bloqueado(u):
 
 def fallo(u):
 	intentos[u] = (intentos.get(u, (0, 0))[0] + 1, time.time() + BLOQUEO_S)
+
+@hook('after_request')
+def cabeceras():
+	# A02: cabeceras de seguridad; no-store evita cachear tokens y archivos
+	response.set_header('X-Content-Type-Options', 'nosniff')
+	response.set_header('Cache-Control', 'no-store')
 
 EXT_PERMITIDAS = {"png", "jpg", "jpeg", "gif"}
 
@@ -373,4 +379,4 @@ def DescargarArchivo(u):
 	return gzip.compress(Path(ruta).read_bytes()).hex()
 
 if __name__ == '__main__':
-    run(host='localhost', port=8080, debug=True)
+    run(host='localhost', port=8080, debug=False)

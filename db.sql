@@ -1,7 +1,9 @@
 /*
 ###-
 create database webapps;
-GRANT ALL PRIVILEGES ON webapps.* TO 'udbwebaps'@'localhost' IDENTIFIED BY 'ku>;k8ND4CN4';
+-- Minimo privilegio: la app solo necesita DML. Usa una contrasena propia y larga;
+CREATE USER 'udbwebaps'@'localhost' IDENTIFIED BY '<CAMBIAR_PASSWORD>';
+GRANT SELECT, INSERT, UPDATE, DELETE ON webapps.* TO 'udbwebaps'@'localhost';
 FLUSH PRIVILEGES
 */
 
