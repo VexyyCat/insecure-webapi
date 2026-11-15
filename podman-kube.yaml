@@ -1,0 +1,75 @@
+# Pod con la API (Python) y MariaDB.
+# Dentro de un pod los contenedores comparten red, así que el
+# host='localhost' fijo en index.py llega directo a MariaDB.
+#
+# Uso:
+#   podman build -t localhost/insecure-webapi-api -f Containerfile .
+#   podman build -t localhost/insecure-webapi-db  -f Containerfile.db .
+#   podman kube play podman-kube.yaml
+#   podman kube down podman-kube.yaml
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: insecure-webapi-dbdata
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: insecure-webapi-img
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: insecure-webapi
+spec:
+  restartPolicy: Always
+  containers:
+    - name: db
+      image: localhost/insecure-webapi-db:latest
+      env:
+        - name: MARIADB_DATABASE
+          value: "webapps"
+        - name: MARIADB_USER
+          value: "udbwebaps"
+        - name: MARIADB_PASSWORD
+          value: "<CAMBIAR_PASSWORD>"
+        - name: MARIADB_RANDOM_ROOT_PASSWORD
+          value: "1"
+      volumeMounts:
+        - name: dbdata
+          mountPath: /var/lib/mysql
+
+    - name: api
+      image: localhost/insecure-webapi-api:latest
+      ports:
+        - containerPort: 8080
+          hostPort: 8080
+      volumeMounts:
+        - name: img
+          mountPath: /app/img
+        - name: dbjson
+          mountPath: /app/db.json
+          readOnly: true
+
+  volumes:
+    - name: dbjson
+      hostPath:
+        path: ./db.json
+        type: File
+    - name: dbdata
+      persistentVolumeClaim:
+        claimName: insecure-webapi-dbdata
+    - name: img
+      persistentVolumeClaim:
+        claimName: insecure-webapi-img

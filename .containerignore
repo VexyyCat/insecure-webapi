@@ -1,0 +1,12 @@
+.git
+index.php
+htaccess.txt
+*.dia
+*.png
+*.md
+LICENSE
+tmp/
+img/
+__pycache__/
+db.json
+docs/

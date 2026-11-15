@@ -1,0 +1,11 @@
+# MariaDB con el esquema de insecure-webapi precargado
+FROM docker.io/library/mariadb:11.4
+
+# Se ejecuta solo la primera vez (cuando el volumen de datos está vacío),
+# dentro de la base indicada en MARIADB_DATABASE.
+COPY db.sql /docker-entrypoint-initdb.d/01-schema.sql
+# La imagen da ALL PRIVILEGES a MARIADB_USER; se reduce a DML (A02:2025, minimo privilegio)
+COPY db-privilegios.sql /docker-entrypoint-initdb.d/02-privilegios.sql
+
+# Juego de caracteres/collation compatible con mysql-connector-python
+CMD ["mariadbd", "--character-set-server=utf8mb4", "--collation-server=utf8mb4_general_ci"]
