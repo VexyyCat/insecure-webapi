@@ -1,5 +1,4 @@
 import json
-import random
 import hashlib
 import hmac
 import os
@@ -10,7 +9,6 @@ import bcrypt
 import mysql.connector
 import base64
 import shutil
-from datetime import datetime
 from pathlib import Path
 from bottle import route, run, template, post, get, request, response, static_file
 import gzip
@@ -34,18 +32,11 @@ function loadDatabaseSettings(pathjs):
 
 """
 def getToken():
-	tiempo = datetime.now().timestamp()
-	numero = random.random()
-	cadena = str(tiempo) + str(numero)
-	numero2 = random.random()
-	cadena2 = str(numero)+str(tiempo)+str(numero2)
-	m = hashlib.sha1()
-	m.update(cadena.encode())
-	P = m.hexdigest()
-	m = hashlib.md5()
-	m.update(cadena.encode())
-	Q = m.hexdigest()
-	return f"{P[:20]}{Q[20:]}"
+	return secrets.token_urlsafe(32)
+
+# El token se guarda como sha256: un volcado de la BD no entrega sesiones validas
+def hashToken(t):
+	return hashlib.sha256(str(t).encode()).hexdigest()
 
 EXT_PERMITIDAS = {"png", "jpg", "jpeg", "gif"}
 
@@ -162,16 +153,10 @@ def Login():
 		return {"R":-5}
 
 	T = getToken();
-	#file_put_contents('/tmp/log','insert into AccesoToken values('.R[0].',"'.T.'",now())');
-	with open("/tmp/log","a") as log:
-		log.write(f'Delete from AccesoToken where id_Usuario = "{R[0][0]}"\n')
-		log.write(f'insert into AccesoToken values({R[0][0]},"{T}",now())\n')
-	
-	
 	try:
 		with db.cursor() as cursor:
 			cursor.execute('Delete from AccesoToken where id_Usuario = %s', (R[0][0],))
-			cursor.execute('insert into AccesoToken values(%s,%s,now())', (R[0][0], T))
+			cursor.execute('insert into AccesoToken values(%s,%s,now())', (R[0][0], hashToken(T)))
 			db.commit()
 			db.close()
 			return {"R":0,"D":T}
@@ -230,7 +215,7 @@ def Imagen():
 	R = False
 	try:
 		with db.cursor() as cursor:
-			cursor.execute('select id_Usuario from AccesoToken where token = %s', (TKN,))
+			cursor.execute('select id_Usuario from AccesoToken where token = %s', (hashToken(TKN),))
 			R = cursor.fetchall()
 	except Exception as e: 
 		print(e)
@@ -306,7 +291,7 @@ def Descargar():
 	R = False
 	try:
 		with db.cursor() as cursor:
-			cursor.execute('select id_Usuario from AccesoToken where token = %s', (TKN,))
+			cursor.execute('select id_Usuario from AccesoToken where token = %s', (hashToken(TKN),))
 			R = cursor.fetchall()
 	except Exception as e: 
 		print(e)
