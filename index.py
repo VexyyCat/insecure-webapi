@@ -12,7 +12,9 @@ import base64
 import shutil
 from datetime import datetime
 from pathlib import Path
-from bottle import route, run, template, post, request, static_file
+from bottle import route, run, template, post, get, request, response, static_file
+import gzip
+import secrets
 
 
 
@@ -314,8 +316,31 @@ def Descargar():
 		print(e)
 		db.close()
 		return {"R":-3}
-	print(Path("img").resolve(),R[0][1])
-	return static_file(R[0][1],Path(".").resolve())
+	db.close()
+	if not R:
+		return {"R":-4}
+	# URL aleatoria de un solo uso, vigente 5 min
+	u = secrets.token_urlsafe(32)
+	enlaces[u] = (R[0][1], time.time() + 300)
+	return {"R":0,"D":f"/Descargar/{u}"}
+
+# ponytail: dict en memoria (un solo proceso, se pierde al reiniciar); tabla en BD si se necesita persistir
+enlaces = {}
+
+"""
+/*
+ * GET /Descargar/<url aleatoria>
+ * Retorna el archivo comprimido con gzip y codificado en hex (text/plain)
+ * */
+"""
+@get('/Descargar/<u>')
+def DescargarArchivo(u):
+	ruta, exp = enlaces.pop(u, (None, 0))
+	if not ruta or exp < time.time():
+		response.status = 404
+		return {"R":-1}
+	response.content_type = 'text/plain'
+	return gzip.compress(Path(ruta).read_bytes()).hex()
 
 if __name__ == '__main__':
     run(host='localhost', port=8080, debug=True)
