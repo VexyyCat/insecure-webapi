@@ -1,6 +1,11 @@
 import json
 import random
 import hashlib
+import hmac
+import os
+import struct
+import time
+import bcrypt
 import mysql.connector
 import base64
 import shutil
@@ -39,8 +44,19 @@ def getToken():
 	Q = m.hexdigest()
 	return f"{P[:20]}{Q[20:]}"
 
+def totp(secret, t=None):
+	# RFC 6238: HMAC-SHA1, 30 s, 6 digitos
+	h = hmac.new(base64.b32decode(secret), struct.pack(">Q", int((t or time.time()) // 30)), "sha1").digest()
+	o = h[-1] & 15
+	return f"{(struct.unpack('>I', h[o:o+4])[0] & 0x7fffffff) % 10**6:06d}"
+
+def verifyTotp(secret, code):
+	# acepta ventana de +-30 s por desfase de reloj
+	now = time.time()
+	return any(hmac.compare_digest(totp(secret, now + d), str(code)) for d in (-30, 0, 30))
+
 """
-*/ 
+*/
 # Registro
 /*
  * Este Registro recibe un JSON con el siguiente formato
@@ -72,15 +88,18 @@ def Registro():
 	# TODO Control de error de la DB
 	R = False
 	try:
+		h = bcrypt.hashpw(str(request.json["password"]).encode(), bcrypt.gensalt()).decode()
+		secret = base64.b32encode(os.urandom(20)).decode()
 		with db.cursor() as cursor:
-			cursor.execute(f'insert into Usuario values(null,"{request.json["uname"]}","{request.json["email"]}",md5("{request.json["password"]}"))');
+			cursor.execute(f'insert into Usuario values(null,"{request.json["uname"]}","{request.json["email"]}","{h}","{secret}")');
 			R = cursor.lastrowid
 			db.commit()
 		db.close()
 	except Exception as e:
-		print(e) 
+		print(e)
 		return {"R":-2}
-	return {"R":0,"D":R}
+	# totp_secret se entrega una sola vez para registrarlo en la app autenticadora
+	return {"R":0,"D":R,"totp_secret":secret}
 
 
 
@@ -111,29 +130,31 @@ def Login():
 	if not request.json:
 		return {"R":-1}
 	######/
-	R = 'uname' in request.json  and 'password' in request.json
+	R = 'uname' in request.json  and 'password' in request.json and 'totp' in request.json
 	# TODO checar si estan vacio los elementos del json
 	if not R:
 		return {"R":-1}
-	
+
 	# TODO validar correo en json
 	# TODO Control de error de la DB
 	R = False
 	try:
 		with db.cursor() as cursor:
-			print(f'Select id from  Usuario where uname ="{request.json["uname"]}" and password = md5("{request.json["password"]}")')
-			cursor.execute(f'Select id from  Usuario where uname ="{request.json["uname"]}" and password = md5("{request.json["password"]}")');
+			cursor.execute(f'Select id,password,totp_secret from  Usuario where uname ="{request.json["uname"]}"');
 			R = cursor.fetchall()
-	except Exception as e: 
+	except Exception as e:
 		print(e)
 		db.close()
 		return {"R":-2}
-	
-	
-	if not R:
+
+
+	if not R or not bcrypt.checkpw(str(request.json["password"]).encode(), R[0][1].encode()):
 		db.close()
 		return {"R":-3}
-	
+	if not verifyTotp(R[0][2], request.json["totp"]):
+		db.close()
+		return {"R":-5}
+
 	T = getToken();
 	#file_put_contents('/tmp/log','insert into AccesoToken values('.R[0].',"'.T.'",now())');
 	with open("/tmp/log","a") as log:
