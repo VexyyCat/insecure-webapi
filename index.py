@@ -47,6 +47,8 @@ def getToken():
 	Q = m.hexdigest()
 	return f"{P[:20]}{Q[20:]}"
 
+EXT_PERMITIDAS = {"png", "jpg", "jpeg", "gif"}
+
 def totp(secret, t=None):
 	# RFC 6238: HMAC-SHA1, 30 s, 6 digitos
 	h = hmac.new(base64.b32decode(secret), struct.pack(">Q", int((t or time.time()) // 30)), "sha1").digest()
@@ -210,7 +212,10 @@ def Imagen():
 	# TODO checar si estan vacio los elementos del json
 	if not R:
 		return {"R":-1}
-	
+	# A01 (path traversal): la extension forma parte de la ruta destino, solo lista blanca
+	if str(request.json['ext']).lower() not in EXT_PERMITIDAS:
+		return {"R":-5}
+
 	dbcnf = loadDatabaseSettings('db.json');
 	db = mysql.connector.connect(
 		host='localhost', port = dbcnf['port'],
@@ -233,6 +238,10 @@ def Imagen():
 		return {"R":-2}
 	
 	
+	# A01: sin token valido no se sube nada
+	if not R:
+		db.close()
+		return {"R":-4}
 	id_Usuario = R[0][0];
 	with open(f'tmp/{id_Usuario}',"wb") as imagen:
 		imagen.write(base64.b64decode(request.json['data'].encode()))
@@ -306,11 +315,16 @@ def Descargar():
 		
 	
 	
-	# Buscar imagen y enviarla
-	
+	# A01: token obligatorio
+	if not R:
+		db.close()
+		return {"R":-5}
+	id_Usuario = R[0][0]
+	# Buscar imagen y enviarla (A01/IDOR: solo si pertenece al usuario del token)
+
 	try:
 		with db.cursor() as cursor:
-			cursor.execute('Select name,ruta from  Imagen where id = '+str(idImagen));
+			cursor.execute('Select name,ruta from  Imagen where id = '+str(idImagen)+' and id_Usuario = '+str(id_Usuario));
 			R = cursor.fetchall()
 	except Exception as e: 
 		print(e)
